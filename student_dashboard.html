@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Student Dashboard — Silver Lake Academy</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 min-h-screen p-6">
+  <main class="max-w-5xl mx-auto">
+
+    <header class="flex justify-between items-center mb-6">
+      <div>
+        <h1 id="studentTitle" class="text-2xl font-bold text-slate-800">Student Result</h1>
+        <p id="studentMeta" class="text-sm text-slate-500">Loading…</p>
+      </div>
+      <div class="flex gap-3 items-center">
+        <button id="downloadCsv" class="px-3 py-2 bg-slate-100 rounded">Download</button>
+        <button id="emailBtn" class="px-3 py-2 bg-slate-100 rounded">Email</button>
+        <button id="printBtn" class="px-3 py-2 bg-blue-600 text-white rounded">Print</button>
+        <button id="logoutBtn" class="px-3 py-2 bg-white border rounded">Logout</button>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <section class="lg:col-span-2 bg-white rounded-2xl p-6 shadow">
+        <div id="resultArea">
+          <!-- rendered dynamically -->
+        </div>
+      </section>
+
+      <aside class="bg-white rounded-2xl p-6 shadow">
+        <h4 class="font-semibold mb-3">Announcements</h4>
+        <div id="announcements" class="text-sm text-slate-700 space-y-3 mb-4"></div>
+
+        <h4 class="font-semibold mb-3">Teacher's Remark</h4>
+        <div id="teacherRemark" class="bg-blue-50 p-3 rounded text-slate-700 italic">—</div>
+      </aside>
+    </div>
+  </main>
+
+<script>
+(function(){
+  const LS_STUDENTS = 'sla_students_v3';
+  const LS_ANN = 'sla_ann_v3';
+
+  function loadStudents(){ try { return JSON.parse(localStorage.getItem(LS_STUDENTS) || '{}'); } catch(e){ return {}; } }
+  function loadAnn(){ try { return JSON.parse(localStorage.getItem(LS_ANN) || '[]'); } catch(e){ return []; } }
+
+  // session
+  const session = JSON.parse(sessionStorage.getItem('sla_session') || 'null');
+  if (!session || session.role !== 'student'){ location.href = 'index.html'; return; }
+  const admission = session.admission;
+
+  const studentTitle = document.getElementById('studentTitle');
+  const studentMeta = document.getElementById('studentMeta');
+  const resultArea = document.getElementById('resultArea');
+  const announcementsDiv = document.getElementById('announcements');
+  const teacherRemarkDiv = document.getElementById('teacherRemark');
+
+  // compute summary helper (same logic used in admin)
+  function computeStudentSummary(student){
+    const subjects = new Set();
+    (student.tests||[]).forEach(t => subjects.add(t.subject));
+    (student.exams||[]).forEach(e => subjects.add(e.subject));
+    let total = 0, count = 0;
+    subjects.forEach(sub => {
+      const t = (student.tests||[]).find(x=>x.subject===sub);
+      const e = (student.exams||[]).find(x=>x.subject===sub);
+      const tAvg = t ? ((Number(t.t1||0) + Number(t.t2||0) + Number(t.t3||0)) / ([t.t1,t.t2,t.t3].filter(x=>x!==undefined && x!=='').length || 1)) : 0;
+      const exam = e ? Number(e.score||0) : null;
+      let combined = 0;
+      if (exam !== null) combined = Math.round(((tAvg || 0) + exam) / (exam !== null ? 2 : 1));
+      else combined = Math.round(tAvg || 0);
+      total += combined;
+      count++;
+    });
+    const average = count ? Math.round((total / count) * 10) / 10 : 0;
+    return { total, average, subjectsCount: count };
+  }
+
+  // compute positions in same class/term/session
+  function computePositionsFor(className, term, session){
+    const students = loadStudents();
+    const list = Object.values(students).filter(s => (s.class||'') === (className||'') && (s.term||'') === (term||'') && (s.session||'') === (session||''));
+    list.forEach(s => { s._summary = computeStudentSummary(s); });
+    list.sort((a,b) => (b._summary?.average || 0) - (a._summary?.average || 0));
+    const positions = {};
+    let prev = null, rank = 0;
+    for (let i=0;i<list.length;i++){
+      const st = list[i];
+      if (prev === null || st._summary.average !== prev){
+        rank = i + 1;
+        positions[st.admissionNo] = rank;
+        prev = st._summary.average;
+      } else {
+        positions[st.admissionNo] = rank;
+      }
+    }
+    return positions;
+  }
+
+  // render student's result
+  function renderStudent(){
+    const students = loadStudents();
+    const s = students[admission];
+    if (!s) {
+      resultArea.innerHTML = '<p class="text-slate-600">No result found. Contact admin or go back to portal.</p>';
+      studentMeta.textContent = '';
+      return;
+    }
+    studentTitle.textContent = `Result — ${s.name}`;
+    studentMeta.textContent = `${s.admissionNo} · ${s.class} · ${s.term} · ${s.session}`;
+
+    // build table rows
+    let rows = '';
+    const subjects = new Set();
+    (s.tests||[]).forEach(t => subjects.add(t.subject));
+    (s.exams||[]).forEach(e => subjects.add(e.subject));
+    Array.from(subjects).forEach(sub => {
+      const t = (s.tests||[]).find(x=>x.subject===sub) || {};
+      const e = (s.exams||[]).find(x=>x.subject===sub) || {};
+      const tAvg = t && (t.t1||t.t2||t.t3) ? Math.round(((Number(t.t1||0)+Number(t.t2||0)+Number(t.t3||0))/3)) : '';
+      const combined = (tAvg !== '' || e.score) ? Math.round(((Number(tAvg||0) + Number(e.score||0)) / (e.score !== undefined && e.score !== null ? 2 : 1))) : '';
+      rows += `<tr class="border-b">
+        <td class="p-2">${escapeHtml(sub)}</td>
+        <td class="p-2 text-center">${t.t1 || ''}</td>
+        <td class="p-2 text-center">${t.t2 || ''}</td>
+        <td class="p-2 text-center">${t.t3 || ''}</td>
+        <td class="p-2 text-center">${e.score || ''}</td>
+        <td class="p-2 text-center font-semibold">${combined}</td>
+      </tr>`;
+    });
+
+    const summary = computeStudentSummary(s);
+    const positions = computePositionsFor(s.class, s.term, s.session);
+    const pos = positions[s.admissionNo] || '—';
+
+    resultArea.innerHTML = `
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <h3 class="text-lg font-semibold">${escapeHtml(s.name)}</h3>
+          <div class="text-sm text-slate-500">${escapeHtml(s.admissionNo)} · ${escapeHtml(s.class)}</div>
+        </div>
+        <div class="text-right">
+          <div class="text-sm text-slate-500">Avg</div>
+          <div class="text-xl font-bold text-blue-700">${summary.average || '—'}</div>
+          <div class="text-sm text-slate-500 mt-1">Position: <strong>${pos}</strong></div>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50">
+            <tr><th class="p-2 text-left">Subject</th><th class="p-2 text-center">T1</th><th class="p-2 text-center">T2</th><th class="p-2 text-center">T3</th><th class="p-2 text-center">Exam</th><th class="p-2 text-center">Combined</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="mt-4 text-sm">Teacher's Remark: <em>${escapeHtml(s.teacherComment || '—')}</em></div>
+    `;
+    // populate announcements and teacher remark
+    renderAnnouncements();
+  }
+
+  // render announcements
+  function renderAnnouncements(){
+    const list = loadAnn();
+    announcementsDiv.innerHTML = list.map(a => `
+      <div class="p-2 bg-slate-50 rounded">
+        ${a.title ? `<div class="font-medium">${escapeHtml(a.title)}</div>` : ''}
+        <div class="text-sm">${escapeHtml(a.body)}</div>
+        <div class="text-xs text-slate-400 mt-1">${new Date(a.time).toLocaleString()}</div>
+      </div>
+    `).join('') || '<div class="text-sm text-slate-500">No announcements</div>';
+  }
+
+  // download CSV for the student
+  function downloadCSV(){
+    const students = loadStudents();
+    const s = students[admission];
+    if (!s) { alert('No result'); return; }
+    const rows = [['admissionNo','name','class','term','session','subject','t1','t2','t3','exam','grade','remark']];
+    (s.tests||[]).forEach(t => {
+      const ex = (s.exams||[]).find(e => e.subject === t.subject) || {};
+      rows.push([s.admissionNo, s.name, s.class, s.term, s.session||'', t.subject, t.t1||'', t.t2||'', t.t3||'', ex.score||'', ex.grade||'', ex.remark||'']);
+    });
+    const csv = rows.map(r => r.map(c => `"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type:'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${s.admissionNo}_results.csv`; a.click(); a.remove();
+  }
+
+  // print area
+  function doPrint(){
+    window.print();
+  }
+
+  // email (mailto)
+  function doEmail(){
+    const students = loadStudents();
+    const s = students[admission];
+    if (!s) return alert('No student data');
+    const subject = encodeURIComponent(`Result for ${s.name}`);
+    const bodyParts = [`${s.name} (${s.admissionNo}) results:`, ''];
+    (s.tests||[]).forEach(t => {
+      const ex = (s.exams||[]).find(e=>e.subject===t.subject) || {};
+      bodyParts.push(`${t.subject}: T1:${t.t1} T2:${t.t2} T3:${t.t3} Exam:${ex.score||''}`);
+    });
+    const body = encodeURIComponent(bodyParts.join('\n'));
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  }
+
+  // utility
+  function escapeHtml(s){ if (s===null||s===undefined) return ''; return String(s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
+
+  // attach buttons
+  document.getElementById('logoutBtn').addEventListener('click', ()=> { sessionStorage.removeItem('sla_session'); location.href='index.html'; });
+  document.getElementById('downloadCsv').addEventListener('click', downloadCSV);
+  document.getElementById('printBtn').addEventListener('click', doPrint);
+  document.getElementById('emailBtn').addEventListener('click', doEmail);
+
+  renderStudent();
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin Dashboard — Silver Lake Academy</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .drag-over { outline: 3px dashed rgba(59,130,246,0.35); }
+    .small-muted { font-size: 0.85rem; color: #6b7280; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-6">
+  <main class="max-w-6xl mx-auto">
+
+    <header class="flex justify-between items-center mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800">Admin Dashboard</h1>
+        <p id="adminMeta" class="text-sm text-slate-500">Loading…</p>
+      </div>
+      <div class="flex gap-3 items-center">
+        <button id="exportAll" class="px-3 py-2 bg-slate-100 rounded">Export All</button>
+        <button id="openPostAnn" class="px-3 py-2 bg-yellow-100 rounded">Post Announcement</button>
+        <button id="logoutBtn" class="px-3 py-2 bg-white border rounded">Logout</button>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Main (upload + manage) -->
+      <section class="lg:col-span-2 bg-white rounded-2xl p-6 shadow">
+        <div class="flex items-start justify-between mb-4">
+          <div>
+            <h2 class="font-semibold text-lg mb-1">Upload Student Results (CSV)</h2>
+            <p class="small-muted">Expected columns: admissionno,name,class,term,session,subject,t1,t2,t3,exam,grade,remark</p>
+          </div>
+          <div class="text-sm text-slate-500">Local demo storage — data kept in your browser</div>
+        </div>
+
+        <div id="uploadArea" class="border-2 border-dashed border-slate-200 rounded p-6 text-center mb-4">
+          <input id="csvFile" type="file" accept=".csv" class="hidden" />
+          <div class="text-slate-600 mb-3"><i class="fa-regular fa-file-csv"></i> Drag & drop CSV here or click to choose</div>
+          <div class="flex justify-center gap-2">
+            <button id="chooseCsv" class="px-3 py-2 bg-blue-600 text-white rounded">Choose file</button>
+            <button id="clearStudents" class="px-3 py-2 bg-slate-100 rounded">Clear All Student Data</button>
+          </div>
+        </div>
+
+        <div id="uploadStatus" class="text-sm text-slate-600 mb-6"></div>
+
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold">Manage Students</h3>
+          <div class="flex gap-2">
+            <button id="addManual" class="px-3 py-2 bg-emerald-600 text-white rounded">Add Student</button>
+            <button id="refreshBtn" class="px-3 py-2 bg-slate-100 rounded">Refresh</button>
+          </div>
+        </div>
+
+        <div id="manageStudents" class="space-y-2 mb-6 overflow-auto max-h-[48vh]"></div>
+      </section>
+
+      <!-- Right column: recent uploads + announcements -->
+      <aside class="bg-white rounded-2xl p-6 shadow">
+        <h4 class="font-semibold mb-3">Recent Uploads</h4>
+        <ul id="recentUploads" class="text-sm text-slate-600 space-y-2 mb-4"></ul>
+
+        <h4 class="font-semibold mb-3">Announcements</h4>
+        <div id="announcements" class="text-sm text-slate-600 space-y-2"></div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- Modal Add/Edit Student -->
+  <div id="editModal" class="fixed inset-0 hidden items-center justify-center z-40">
+    <div class="absolute inset-0 bg-black/40"></div>
+    <div class="relative bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-auto">
+      <h3 id="modalTitle" class="text-lg font-semibold mb-3">Add / Edit Student</h3>
+      <form id="editForm" class="space-y-3">
+        <div class="grid md:grid-cols-3 gap-3">
+          <input id="editAdmission" placeholder="Admission No" class="w-full px-3 py-2 border rounded" required />
+          <input id="editName" placeholder="Full name" class="w-full px-3 py-2 border rounded" required />
+          <input id="editClass" placeholder="Class (e.g. 12A)" class="w-full px-3 py-2 border rounded" />
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-3">
+          <select id="editTerm" class="px-3 py-2 border rounded">
+            <option>1st Term</option><option>2nd Term</option><option>3rd Term</option>
+          </select>
+          <input id="editSession" placeholder="Session (2024/2025)" class="px-3 py-2 border rounded" />
+          <input id="editTeacherComment" placeholder="Teacher's short remark (optional)" class="px-3 py-2 border rounded" />
+        </div>
+
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <label class="font-medium">Subjects (tests & exam)</label>
+            <button id="addSubjectRowBtn" type="button" class="text-sm text-blue-600">+ Add subject</button>
+          </div>
+          <div id="subjectRows" class="space-y-2"></div>
+          <p class="small-muted mt-2">Each row is one subject. Tests are T1/T2/T3; Exam is the final exam score.</p>
+        </div>
+
+        <div class="flex justify-end gap-2 mt-4">
+          <button type="button" id="closeEdit" class="px-3 py-2 bg-slate-100 rounded">Cancel</button>
+          <button type="submit" class="px-3 py-2 bg-emerald-600 text-white rounded">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Announcement Modal -->
+  <div id="annModal" class="fixed inset-0 hidden items-center justify-center z-40">
+    <div class="absolute inset-0 bg-black/40"></div>
+    <div class="relative bg-white rounded-lg p-6 max-w-xl w-full">
+      <h3 class="text-lg font-semibold mb-2">New Announcement</h3>
+      <input id="annTitle" placeholder="Title (optional)" class="w-full px-3 py-2 border rounded mb-2" />
+      <textarea id="annBody" rows="4" placeholder="Write announcement..." class="w-full px-3 py-2 border rounded"></textarea>
+      <div class="flex justify-end gap-2 mt-3">
+        <button id="annCancel" class="px-3 py-2 bg-slate-100 rounded">Cancel</button>
+        <button id="annPost" class="px-3 py-2 bg-yellow-500 text-white rounded">Post</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  // --- namespaced keys
+  const LS_STUDENTS = 'sla_students_v3';
+  const LS_UPLOADS   = 'sla_uploads_v3';
+  const LS_ANN       = 'sla_ann_v3';
+
+  // Session check
+  const session = JSON.parse(sessionStorage.getItem('sla_session') || 'null');
+  if (!session || session.role !== 'admin'){ location.href = 'i.html'; return; }
+  document.getElementById('adminMeta').textContent = `Signed in as ${session.username || 'admin'}`;
+
+  // helpers
+  function loadStudents(){ try { return JSON.parse(localStorage.getItem(LS_STUDENTS) || '{}'); } catch(e){ return {}; } }
+  function saveStudents(obj){ localStorage.setItem(LS_STUDENTS, JSON.stringify(obj)); }
+  function loadUploads(){ try { return JSON.parse(localStorage.getItem(LS_UPLOADS) || '[]'); } catch(e){ return []; } }
+  function saveUploads(a){ localStorage.setItem(LS_UPLOADS, JSON.stringify(a)); }
+  function loadAnn(){ try { return JSON.parse(localStorage.getItem(LS_ANN) || '[]'); } catch(e){ return []; } }
+  function saveAnn(a){ localStorage.setItem(LS_ANN, JSON.stringify(a)); }
+
+  // seed demo (multiple students so ranking works)
+  function seedIfEmpty(){
+    const s = loadStudents();
+    if (Object.keys(s).length === 0){
+      const demo = {
+        SLA2023001: {
+          admissionNo: 'SLA2023001', name:'John Doe', class:'12A', term:'1st Term', session:'2024/2025',
+          tests:[ {subject:'Mathematics', t1:85, t2:78, t3:92}, {subject:'English', t1:88, t2:91, t3:85} ],
+          exams:[ {subject:'Mathematics', score:87, grade:'A', remark:'Excellent'}, {subject:'English', score:85, grade:'A', remark:'Very Good'} ],
+          teacherComment: 'Excellent progress'
+        },
+        SLA2023002: {
+          admissionNo: 'SLA2023002', name:'Jane Smith', class:'12A', term:'1st Term', session:'2024/2025',
+          tests:[ {subject:'Mathematics', t1:62, t2:70, t3:68}, {subject:'English', t1:75, t2:78, t3:80} ],
+          exams:[ {subject:'Mathematics', score:67, grade:'C', remark:'Needs work'}, {subject:'English', score:78, grade:'B', remark:'Good'} ],
+          teacherComment: 'Needs to focus on maths revision.'
+        },
+        SLA2023003: {
+          admissionNo: 'SLA2023003', name:'Fred Brown', class:'12B', term:'1st Term', session:'2024/2025',
+          tests:[ {subject:'Mathematics', t1:90, t2:92, t3:88}, {subject:'English', t1:82, t2:85, t3:80} ],
+          exams:[ {subject:'Mathematics', score:91, grade:'A', remark:'Very Good'} ],
+          teacherComment: 'Great student'
+        }
+      };
+      saveStudents(demo);
+      saveUploads([]);
+      saveAnn([{ id: Date.now(), title: 'Welcome', body: 'Demo announcements are enabled.', time: new Date().toISOString() }]);
+    }
+  }
+  seedIfEmpty();
+
+  // compute summary for a student (adds .summary = { total, average, subjectsCount })
+  function computeStudentSummary(student){
+    if (!student) return null;
+    const subjects = new Set();
+    (student.tests||[]).forEach(t => subjects.add(t.subject));
+    (student.exams||[]).forEach(e => subjects.add(e.subject));
+    let total = 0, count = 0;
+    subjects.forEach(sub => {
+      const t = (student.tests||[]).find(x=>x.subject===sub);
+      const e = (student.exams||[]).find(x=>x.subject===sub);
+      const tAvg = t ? ((Number(t.t1||0) + Number(t.t2||0) + Number(t.t3||0)) / ([t.t1,t.t2,t.t3].filter(x=>x!==undefined && x!=='').length || 1)) : 0;
+      const exam = e ? Number(e.score||0) : null;
+      let combined = 0;
+      if (exam !== null) combined = Math.round(((tAvg || 0) + exam) / (exam !== null ? 2 : 1));
+      else combined = Math.round(tAvg || 0);
+      total += combined;
+      count++;
+    });
+    const average = count ? Math.round((total / count) * 10) / 10 : 0;
+    student.summary = { total, average, subjectsCount: count };
+    return student.summary;
+  }
+
+  // recompute all students summaries
+  function recomputeAll() {
+    const students = loadStudents();
+    Object.values(students).forEach(s => computeStudentSummary(s));
+    saveStudents(students);
+  }
+
+  // compute positions for a class/term/session (returns map admissionNo => position)
+  function computePositionsFor(className, term, session){
+    const students = loadStudents();
+    const list = Object.values(students).filter(s => (s.class||'') === (className||'') && (s.term||'') === (term||'') && (s.session||'') === (session||''));
+    list.forEach(s => computeStudentSummary(s));
+    // sort by average desc
+    list.sort((a,b) => (b.summary?.average || 0) - (a.summary?.average || 0));
+    const positions = {};
+    let rank = 0, prev = null, skipped = 0;
+    for (let i=0;i<list.length;i++){
+      const st = list[i];
+      if (prev === null || st.summary.average !== prev){
+        rank = i + 1;
+        positions[st.admissionNo] = rank;
+        prev = st.summary.average;
+      } else {
+        // tie -> same rank as previous
+        positions[st.admissionNo] = rank;
+      }
+    }
+    return positions;
+  }
+
+  // ===== UI references =====
+  const uploadArea = document.getElementById('uploadArea');
+  const csvFile = document.getElementById('csvFile');
+  const chooseCsv = document.getElementById('chooseCsv');
+  const uploadStatus = document.getElementById('uploadStatus');
+  const recentUploads = document.getElementById('recentUploads');
+  const manageStudents = document.getElementById('manageStudents');
+  const exportAll = document.getElementById('exportAll');
+  const addManual = document.getElementById('addManual');
+  const refreshBtn = document.getElementById('refreshBtn');
+  const clearStudents = document.getElementById('clearStudents');
+  const openPostAnn = document.getElementById('openPostAnn');
+
+  const editModal = document.getElementById('editModal');
+  const editForm = document.getElementById('editForm');
+  const closeEdit = document.getElementById('closeEdit');
+  const subjectRows = document.getElementById('subjectRows');
+  const addSubjectRowBtn = document.getElementById('addSubjectRowBtn');
+
+  // announcements modal
+  const annModal = document.getElementById('annModal');
+  const annTitle = document.getElementById('annTitle');
+  const annBody = document.getElementById('annBody');
+  const annCancel = document.getElementById('annCancel');
+  const annPost = document.getElementById('annPost');
+
+  // drag/drop UX
+  ['dragenter','dragover'].forEach(e => uploadArea.addEventListener(e, (ev)=> { ev.preventDefault(); uploadArea.classList.add('drag-over'); }));
+  ['dragleave','drop'].forEach(e => uploadArea.addEventListener(e, (ev)=> { ev.preventDefault(); uploadArea.classList.remove('drag-over'); }));
+  uploadArea.addEventListener('drop', (ev) => { const f = ev.dataTransfer.files && ev.dataTransfer.files[0]; if (f) handleCsv(f); });
+
+  chooseCsv.addEventListener('click', ()=> csvFile.click());
+  csvFile.addEventListener('change', (e)=> { const f = e.target.files[0]; if (f) handleCsv(f); });
+
+  // simple CSV parser (handles common CSVs without complex quoting)
+  function parseCSV(text){
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (!lines.length) return { headers:[], rows:[] };
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const rows = [];
+    for(let i=1;i<lines.length;i++){
+      // naive split — good for simple CSVs
+      const parts = lines[i].split(',').map(c => c.trim());
+      if (parts.length === 0) continue;
+      const obj = {};
+      headers.forEach((h, idx) => obj[h] = parts[idx] || '');
+      rows.push(obj);
+    }
+    return { headers, rows };
+  }
+
+  async function handleCsv(file){
+    if (!file.name.match(/\.csv$/i)){ if(!confirm('File is not .csv — continue?')) return; }
+    uploadStatus.textContent = `Reading ${file.name}…`;
+    try {
+      const txt = await file.text();
+      const { headers, rows } = parseCSV(txt);
+      let students = loadStudents();
+      let imported = 0;
+      rows.forEach(r => {
+        const adm = (r.admissionno || r.admission || '').trim();
+        if (!adm) return;
+        if (!students[adm]) students[adm] = { admissionNo: adm, name: r.name || adm, class: r.class || '', term: r.term || '1st Term', session: r.session || '2024/2025', tests: [], exams: [], teacherComment: '' };
+        const s = students[adm];
+        const subj = r.subject || '';
+        if (subj){
+          const tRow = { subject: subj, t1: Number(r.t1||0), t2: Number(r.t2||0), t3: Number(r.t3||0) };
+          const idx = (s.tests||[]).findIndex(t=>t.subject===subj);
+          if (idx>=0) s.tests[idx] = tRow; else s.tests.push(tRow);
+          const eRow = { subject: subj, score: Number(r.exam||0), grade: r.grade||'', remark: r.remark||'' };
+          const eIdx = (s.exams||[]).findIndex(e=>e.subject===subj);
+          if (eIdx>=0) s.exams[eIdx] = eRow; else s.exams.push(eRow);
+          imported++;
+        }
+        students[adm] = s;
+      });
+      saveStudents(students);
+      const uploads = loadUploads();
+      uploads.unshift({ id: Date.now(), fileName: file.name, date: new Date().toISOString(), imported });
+      saveUploads(uploads);
+      uploadStatus.textContent = `Imported ${imported} rows from ${file.name}`;
+      recomputeAll();
+      renderRecentUploads(); renderManageStudents();
+      alert(`Imported ${imported} rows`);
+    } catch(err){
+      uploadStatus.textContent = 'Failed to read file';
+      console.error(err);
+      alert('Import failed — see console for details');
+    }
+  }
+
+  // Render recent uploads
+  function renderRecentUploads(){
+    const uploads = loadUploads();
+    if (!recentUploads) return;
+    recentUploads.innerHTML = uploads.slice(0,8).map(u => `
+      <li class="flex justify-between items-start bg-slate-50 p-2 rounded">
+        <div>
+          <div class="font-medium">${escapeHtml(u.fileName)}</div>
+          <div class="text-xs text-slate-500">${new Date(u.date).toLocaleString()}</div>
+        </div>
+        <div class="text-xs">
+          <div class="text-right">${u.imported}</div>
+          <button data-id="${u.id}" class="remove-upload text-red-600 text-xs mt-1">Remove</button>
+        </div>
+      </li>
+    `).join('') || '<div class="text-sm text-slate-500">No uploads yet</div>';
+
+    // attach remove handlers
+    recentUploads.querySelectorAll('.remove-upload').forEach(btn => btn.addEventListener('click', (e) => {
+      const id = Number(e.currentTarget.dataset.id);
+      let uploads = loadUploads();
+      uploads = uploads.filter(x => x.id !== id);
+      saveUploads(uploads);
+      renderRecentUploads();
+      alert('Upload record removed (file not deleted from your machine).');
+    }));
+  }
+
+  // Render manage students list (table)
+  function renderManageStudents(){
+    const students = loadStudents();
+    const keys = Object.keys(students).sort();
+    if (!keys.length){
+      manageStudents.innerHTML = '<div class="text-sm text-slate-500 p-4">No students yet</div>';
+      return;
+    }
+
+    // recompute summaries & positions per class
+    recomputeAll();
+
+    // create HTML table
+    let html = `<table class="w-full text-sm border-collapse">
+      <thead class="bg-slate-50">
+        <tr>
+          <th class="p-2 text-left">Name</th>
+          <th class="p-2">Admission</th>
+          <th class="p-2">Class</th>
+          <th class="p-2">Avg</th>
+          <th class="p-2">Position</th>
+          <th class="p-2">Actions</th>
+        </tr>
+      </thead>
+      <tbody>`;
+    // group positions by class & term & session once
+    const byGroup = {}; // key => positions map
+    keys.forEach(k => {
+      const s = students[k];
+      const key = `${s.class}||${s.term}||${s.session}`;
+      if (!byGroup[key]) byGroup[key] = computePositionsFor(s.class, s.term, s.session);
+    });
+    keys.forEach(adm => {
+      const s = students[adm];
+      const avg = (s.summary && s.summary.average) ? s.summary.average : (computeStudentSummary(s) && s.summary.average);
+      const pos = byGroup[`${s.class}||${s.term}||${s.session}`][s.admissionNo] || '—';
+      html += `<tr class="border-b">
+        <td class="p-2">${escapeHtml(s.name)}</td>
+        <td class="p-2">${escapeHtml(s.admissionNo)}</td>
+        <td class="p-2">${escapeHtml(s.class || '')} <div class="text-xs text-slate-400">${escapeHtml(s.term || '')} · ${escapeHtml(s.session || '')}</div></td>
+        <td class="p-2 font-semibold">${avg ?? '—'}</td>
+        <td class="p-2">${pos}</td>
+        <td class="p-2">
+          <div class="flex gap-2">
+            <button data-adm="${s.admissionNo}" class="editBtn px-2 py-1 bg-blue-600 text-white rounded text-xs">Edit</button>
+            <button data-adm="${s.admissionNo}" class="delBtn px-2 py-1 bg-red-600 text-white rounded text-xs">Delete</button>
+            <button data-adm="${s.admissionNo}" class="printBtn px-2 py-1 bg-slate-200 rounded text-xs">Print</button>
+            <button data-adm="${s.admissionNo}" class="dlBtn px-2 py-1 bg-slate-200 rounded text-xs">Download</button>
+          </div>
+        </td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+    manageStudents.innerHTML = html;
+
+    // attach handlers
+    manageStudents.querySelectorAll('.editBtn').forEach(btn => btn.addEventListener('click', (e)=> openEditModal(e.currentTarget.dataset.adm)));
+    manageStudents.querySelectorAll('.delBtn').forEach(btn => btn.addEventListener('click', (e)=> {
+      const adm = e.currentTarget.dataset.adm;
+      if (!confirm('Delete student and all their data?')) return;
+      const s = loadStudents(); delete s[adm]; saveStudents(s); renderManageStudents(); alert('Deleted');
+    }));
+    manageStudents.querySelectorAll('.printBtn').forEach(btn => btn.addEventListener('click', (e)=> {
+      const adm = e.currentTarget.dataset.adm; doPrintStudent(adm);
+    }));
+    manageStudents.querySelectorAll('.dlBtn').forEach(btn => btn.addEventListener('click', (e)=> {
+      const adm = e.currentTarget.dataset.adm; downloadStudentCSV(adm);
+    }));
+  }
+
+  // open modal: populate with student if adm provided
+  function openEditModal(adm){
+    document.getElementById('modalTitle').textContent = adm ? 'Edit Student' : 'Add Student';
+    const students = loadStudents();
+    const s = adm ? students[adm] : null;
+    document.getElementById('editAdmission').value = s ? s.admissionNo : '';
+    document.getElementById('editName').value = s ? s.name : '';
+    document.getElementById('editClass').value = s ? s.class : '';
+    document.getElementById('editTerm').value = s ? s.term : '1st Term';
+    document.getElementById('editSession').value = s ? s.session || '2024/2025' : '2024/2025';
+    document.getElementById('editTeacherComment').value = s ? s.teacherComment || '' : '';
+
+    // populate subject rows
+    subjectRows.innerHTML = '';
+    const rows = [];
+    const pushRow = (data) => {
+      const id = Math.random().toString(36).slice(2,8);
+      const div = document.createElement('div');
+      div.className = 'grid grid-cols-6 gap-2 items-center';
+      div.dataset.rowid = id;
+      div.innerHTML = `
+        <input class="col-span-2 px-2 py-1 border rounded subject" placeholder="Subject" value="${escapeAttr(data?.subject||'')}" />
+        <input class="px-2 py-1 border rounded t1" placeholder="T1" type="number" value="${escapeAttr(data?.t1||'')}" />
+        <input class="px-2 py-1 border rounded t2" placeholder="T2" type="number" value="${escapeAttr(data?.t2||'')}" />
+        <input class="px-2 py-1 border rounded t3" placeholder="T3" type="number" value="${escapeAttr(data?.t3||'')}" />
+        <div class="col-span-6 flex justify-end gap-2 mt-2">
+          <input class="px-2 py-1 border rounded examScore" placeholder="Exam" type="number" value="${escapeAttr(data?.exam||'')}" />
+          <input class="px-2 py-1 border rounded examGrade" placeholder="Grade" style="width:86px" value="${escapeAttr(data?.grade||'')}" />
+          <button type="button" class="removeRow px-2 py-1 bg-red-500 text-white rounded">Remove</button>
+        </div>
+      `;
+      subjectRows.appendChild(div);
+      div.querySelector('.removeRow').addEventListener('click', ()=> div.remove());
+    };
+
+    if (s){
+      // combine tests & exams by subject
+      const subjects = new Set();
+      (s.tests||[]).forEach(t => subjects.add(t.subject));
+      (s.exams||[]).forEach(e => subjects.add(e.subject));
+      if (subjects.size === 0){
+        pushRow(null);
+      } else {
+        Array.from(subjects).forEach(sub => {
+          const t = (s.tests||[]).find(x=>x.subject === sub) || {};
+          const e = (s.exams||[]).find(x=>x.subject === sub) || {};
+          pushRow({ subject: sub, t1: t.t1 || '', t2: t.t2 || '', t3: t.t3 || '', exam: e.score || '', grade: e.grade || '' });
+        });
+      }
+    } else {
+      // blank row
+      pushRow(null);
+    }
+
+    editModal.classList.remove('hidden'); editModal.classList.add('flex');
+    document.getElementById('editAdmission').focus();
+  }
+
+  addSubjectRowBtn.addEventListener('click', (e)=> {
+    // add blank row
+    const div = document.createElement('div');
+    div.className = 'grid grid-cols-6 gap-2 items-center';
+    div.innerHTML = `
+      <input class="col-span-2 px-2 py-1 border rounded subject" placeholder="Subject" />
+      <input class="px-2 py-1 border rounded t1" placeholder="T1" type="number" />
+      <input class="px-2 py-1 border rounded t2" placeholder="T2" type="number" />
+      <input class="px-2 py-1 border rounded t3" placeholder="T3" type="number" />
+      <div class="col-span-6 flex justify-end gap-2 mt-2">
+        <input class="px-2 py-1 border rounded examScore" placeholder="Exam" type="number" />
+        <input class="px-2 py-1 border rounded examGrade" placeholder="Grade" style="width:86px" />
+        <button type="button" class="removeRow px-2 py-1 bg-red-500 text-white rounded">Remove</button>
+      </div>
+    `;
+    subjectRows.appendChild(div);
+    div.querySelector('.removeRow').addEventListener('click', ()=> div.remove());
+  });
+
+  closeEdit.addEventListener('click', ()=> { editModal.classList.add('hidden'); });
+
+  // Save student from modal
+  editForm.addEventListener('submit', (e)=> {
+    e.preventDefault();
+    const adm = document.getElementById('editAdmission').value.trim();
+    const name = document.getElementById('editName').value.trim();
+    const cls = document.getElementById('editClass').value.trim();
+    const term = document.getElementById('editTerm').value;
+    const session = document.getElementById('editSession').value.trim() || '2024/2025';
+    const teachComment = document.getElementById('editTeacherComment').value.trim();
+
+    if (!adm || !name){ alert('Admission & name required'); return; }
+    const students = loadStudents();
+    const s = students[adm] || { admissionNo: adm, tests:[], exams:[], teacherComment:'' };
+    s.admissionNo = adm; s.name = name; s.class = cls; s.term = term; s.session = session; s.teacherComment = teachComment;
+
+    // collect subject rows
+    const rows = subjectRows.querySelectorAll(':scope > div');
+    const tests = []; const exams = [];
+    rows.forEach(r => {
+      const sub = r.querySelector('.subject')?.value?.trim();
+      if (!sub) return;
+      const t1 = Number(r.querySelector('.t1')?.value || 0);
+      const t2 = Number(r.querySelector('.t2')?.value || 0);
+      const t3 = Number(r.querySelector('.t3')?.value || 0);
+      const examScore = r.querySelector('.examScore')?.value;
+      const examGrade = r.querySelector('.examGrade')?.value;
+      tests.push({ subject: sub, t1, t2, t3 });
+      if (examScore !== undefined && String(examScore).trim() !== '') {
+        exams.push({ subject: sub, score: Number(examScore), grade: examGrade || '', remark: '' });
+      }
+    });
+
+    s.tests = tests;
+    s.exams = exams;
+    computeStudentSummary(s);
+    students[adm] = s;
+    saveStudents(students);
+    recomputeAll();
+    renderManageStudents();
+    editModal.classList.add('hidden');
+    alert('Saved');
+  });
+
+  // Export All as CSV
+  exportAll.addEventListener('click', ()=> {
+    const students = loadStudents();
+    const rows = [['admissionNo','name','class','term','session','subject','t1','t2','t3','exam','grade','remark']];
+    Object.values(students).forEach(s => {
+      (s.tests||[]).forEach(t => {
+        const ex = (s.exams||[]).find(e => e.subject === t.subject) || {};
+        rows.push([s.admissionNo, s.name, s.class, s.term, s.session||'', t.subject, t.t1||'', t.t2||'', t.t3||'', ex.score||'', ex.grade||'', ex.remark||'']);
+      });
+    });
+    const csv = rows.map(r => r.map(c => `"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sla_all_results.csv'; a.click(); a.remove();
+    alert('Export started');
+  });
+
+  // Print student (open printable window)
+  function doPrintStudent(adm){
+    const students = loadStudents();
+    const s = students[adm];
+    if (!s) { alert('Student not found'); return; }
+    computeStudentSummary(s);
+    const html = printableStudentHtml(s);
+    const w = window.open('', '_blank', 'width=900,height=700');
+    w.document.write(html);
+    w.document.close();
+    // wait a moment then print
+    setTimeout(()=> w.print(), 600);
+  }
+
+  // Download single student CSV
+  function downloadStudentCSV(adm){
+    const students = loadStudents();
+    const s = students[adm];
+    if (!s) { alert('Student not found'); return; }
+    const rows = [['admissionNo','name','class','term','session','subject','t1','t2','t3','exam','grade','remark']];
+    (s.tests||[]).forEach(t=>{
+      const ex = (s.exams||[]).find(e=>e.subject === t.subject) || {};
+      rows.push([s.admissionNo, s.name, s.class, s.term, s.session||'', t.subject, t.t1||'', t.t2||'', t.t3||'', ex.score||'', ex.grade||'', ex.remark||'']);
+    });
+    const csv = rows.map(r => r.map(c => `"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${s.admissionNo}_results.csv`; a.click(); a.remove();
+    alert('Download started');
+  }
+
+  function printableStudentHtml(s){
+    const rows = (s.tests||[]).map(t => {
+      const ex = (s.exams||[]).find(e=>e.subject===t.subject) || {};
+      const avg = Math.round(((Number(t.t1||0)+Number(t.t2||0)+Number(t.t3||0))/3 + (ex.score||0)) / (ex.score !== undefined && ex.score !== null ? 2 : 1));
+      return `<tr><td style="padding:6px;border:1px solid #ddd">${escapeHtml(t.subject)}</td>
+              <td style="padding:6px;border:1px solid #ddd">${t.t1||''}</td>
+              <td style="padding:6px;border:1px solid #ddd">${t.t2||''}</td>
+              <td style="padding:6px;border:1px solid #ddd">${t.t3||''}</td>
+              <td style="padding:6px;border:1px solid #ddd">${ex.score||''}</td>
+              <td style="padding:6px;border:1px solid #ddd">${avg}</td></tr>`;
+    }).join('');
+    const html = `
+      <!doctype html><html><head><meta charset="utf-8"><title>Report - ${escapeHtml(s.name)}</title>
+      <style>body{font-family:Arial,Helvetica,sans-serif;padding:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px}</style>
+      </head><body>
+      <h2>Silver Lake Academy — Student Result</h2>
+      <p><strong>${escapeHtml(s.name)}</strong> · ${escapeHtml(s.admissionNo)} · ${escapeHtml(s.class)} · ${escapeHtml(s.term)} · ${escapeHtml(s.session)}</p>
+      <table><thead><tr><th>Subject</th><th>T1</th><th>T2</th><th>T3</th><th>Exam</th><th>Combined</th></tr></thead><tbody>${rows}</tbody></table>
+      <p style="margin-top:10px"><strong>Teacher's comment:</strong> ${escapeHtml(s.teacherComment || '')}</p>
+      </body></html>`;
+    return html;
+  }
+
+  // remove all students
+  clearStudents.addEventListener('click', ()=> {
+    if (!confirm('Clear ALL student data from localStorage?')) return;
+    localStorage.removeItem(LS_STUDENTS);
+    renderManageStudents();
+    alert('Cleared');
+  });
+
+  // announcements
+  openPostAnn.addEventListener('click', ()=> { annModal.classList.remove('hidden'); annModal.classList.add('flex'); annTitle.focus(); });
+  annCancel.addEventListener('click', ()=> { annModal.classList.add('hidden'); annModal.classList.remove('flex'); });
+  annPost.addEventListener('click', ()=> {
+    const title = annTitle.value.trim();
+    const body = annBody.value.trim();
+    if (!body) { alert('Write the announcement text'); return; }
+    const a = loadAnn();
+    a.unshift({ id: Date.now(), title, body, time: new Date().toISOString() });
+    saveAnn(a);
+    annTitle.value = annBody.value = '';
+    annModal.classList.add('hidden'); annModal.classList.remove('flex');
+    renderAnnouncements();
+    alert('Announcement posted');
+  });
+
+  function renderAnnouncements(){
+    const a = loadAnn(); const container = document.getElementById('announcements');
+    container.innerHTML = a.map(x=> `
+      <div class="p-2 bg-slate-50 rounded flex justify-between items-start">
+        <div>
+          ${x.title ? `<div class="font-medium">${escapeHtml(x.title)}</div>` : ''}
+          <div class="text-sm">${escapeHtml(x.body)}</div>
+          <div class="text-xs text-slate-400 mt-1">${new Date(x.time).toLocaleString()}</div>
+        </div>
+        <div>
+          <button data-id="${x.id}" class="delete-ann text-red-600 text-sm">Delete</button>
+        </div>
+      </div>
+    `).join('') || '<div class="text-sm text-slate-500">No announcements</div>';
+
+    container.querySelectorAll('.delete-ann').forEach(btn => btn.addEventListener('click', (e) => {
+      const id = Number(e.currentTarget.dataset.id);
+      if (!confirm('Delete announcement?')) return;
+      const a = loadAnn().filter(x => x.id !== id);
+      saveAnn(a);
+      renderAnnouncements();
+    }));
+  }
+
+  // refresh & add manual
+  addManual.addEventListener('click', ()=> openEditModal());
+  refreshBtn.addEventListener('click', ()=> { renderManageStudents(); renderRecentUploads(); renderAnnouncements(); alert('Refreshed'); });
+
+  // utility: escape html
+  function escapeHtml(s){ if (s===null||s===undefined) return ''; return String(s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
+  function escapeAttr(s){ return s === null || s === undefined ? '' : String(s).replace(/"/g,'&quot;'); }
+
+  // print & download helpers exposed to outer scope
+  window.doPrintStudent = doPrintStudent;
+  window.downloadStudentCSV = downloadStudentCSV;
+
+  // logout
+  document.getElementById('logoutBtn').addEventListener('click', ()=> { sessionStorage.removeItem('sla_session'); location.href='index.html'; });
+
+  // initial render
+  renderRecentUploads(); renderManageStudents(); renderAnnouncements();
+
+})();
+</script>
+</body>
+</html>
+

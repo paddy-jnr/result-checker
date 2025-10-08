@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Silver Lake Academy | Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: radial-gradient(circle at top right, #e0e7ff, #f8fafc);
+      font-family: "Poppins", sans-serif;
+      overflow-x: hidden;
+    }
+
+    /* ======== Toggle Switch Animation ======== */
+    .toggle-wrapper {
+      position: relative;
+      width: 260px;
+      height: 56px;
+      border-radius: 9999px;
+      background: linear-gradient(to right, #c7d2fe, #e0e7ff);
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+      overflow: hidden;
+    }
+
+    .toggle-indicator {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 124px;
+      height: 48px;
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      border-radius: 9999px;
+      box-shadow: 0 4px 10px rgba(79,70,229,0.35);
+      transition: all 0.45s cubic-bezier(0.45, 1.2, 0.5, 1);
+      z-index: 2;
+    }
+
+    input:checked ~ .toggle-indicator {
+      transform: translateX(124px);
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      box-shadow: 0 4px 12px rgba(37,99,235,0.45);
+    }
+
+    .toggle-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 3;
+      font-weight: 600;
+      color: #374151;
+      padding: 0 28px;
+      user-select: none;
+    }
+
+    input:checked ~ .toggle-label .student-text {
+      color: #9ca3af;
+    }
+    input:checked ~ .toggle-label .admin-text {
+      color: white;
+    }
+
+    /* ======== Smooth Fade & Card ======== */
+    .fade {
+      transition: all 0.4s ease;
+    }
+
+    .login-card {
+      backdrop-filter: blur(14px);
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 1.5rem;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    }
+
+    /* ======== Spinner ======== */
+    .spinner {
+      border: 4px solid #e5e7eb;
+      border-top: 4px solid #4f46e5;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+  </style>
+</head>
+
+<body  class="bg-gradient-to-br from-blue-50 to-indigo-50 min-h-screen flex items-center justify-center p-6">
+<main class="w-full max-w-3xl">
+<header class="text-center mb-8">
+      <img src="https://cdn-icons-png.flaticon.com/512/3135/3135755.png" alt="School logo" class="mx-auto w-20 mb-4">
+      <h1 class="text-3xl font-bold text-slate-800">Silver Lake Academy</h1>
+      <p class="text-sm text-slate-500 mt-1">Student Result Portal & Admin Console</p>
+    </header>
+
+  <div class="login-card fade justify-center mb-8">
+    <div class="text-center mb-6">
+     
+    </div>
+
+    <!-- Improved Toggle -->
+    <div class="flex justify-center mb-10">
+      <div class="toggle-wrapper relative">
+        <input type="checkbox" id="loginToggle" class="peer hidden" />
+        <div class="toggle-indicator"></div>
+        <label for="loginToggle" class="toggle-label">
+          <span class="student-text text-white">🎓 Student</span>
+          <span class="admin-text">🧑‍💼 Admin</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Student Login Form -->
+    <form id="studentForm" class="space-y-5 fade">
+      <div>
+        <label class="block text-gray-600 font-medium mb-1">Admission Number</label>
+        <input type="text" id="studentAdmission"
+          class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          placeholder="e.g. SLS/2025/003">
+      </div>
+      <div>
+        <label class="block text-gray-600 font-medium mb-1">Password</label>
+        <input type="password" id="studentPassword"
+          class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          placeholder="Enter your password">
+      </div>
+      <button type="button" id="studentLogin"
+        class="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-semibold hover:bg-indigo-700 transition-all duration-300">Login
+        as Student</button>
+    </form>
+
+    <!-- Admin Login Form -->
+    <form id="adminForm" class="space-y-5 hidden fade">
+      <div>
+        <label class="block text-gray-600 font-medium mb-1">Username</label>
+        <input type="text" id="adminUsername"
+          class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          placeholder="Admin username">
+      </div>
+      <div>
+        <label class="block text-gray-600 font-medium mb-1">Password</label>
+        <input type="password" id="adminPassword"
+          class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          placeholder="Enter password">
+      </div>
+      <button type="button" id="adminLogin"
+        class="w-full bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition-all duration-300">Login
+        as Admin</button>
+    </form>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="hidden mt-8 flex justify-center">
+      <div class="spinner"></div>
+    </div>
+  </div>
+</main>
+  <script>
+    const toggle = document.getElementById("loginToggle");
+    const studentForm = document.getElementById("studentForm");
+    const adminForm = document.getElementById("adminForm");
+    const studentLogin = document.getElementById("studentLogin");
+    const adminLogin = document.getElementById("adminLogin");
+    const spinner = document.getElementById("loadingSpinner");
+
+    // Toggle between forms
+    toggle.addEventListener("change", () => {
+      studentForm.classList.toggle("hidden");
+      adminForm.classList.toggle("hidden");
+    });
+
+    // Spinner helper
+    function showSpinner() {
+      spinner.classList.remove("hidden");
+    }
+
+    // Student login logic
+    studentLogin.addEventListener("click", () => {
+      const admission = document.getElementById("studentAdmission").value.trim();
+      const password = document.getElementById("studentPassword").value.trim();
+
+      if (!admission || !password) {
+        alert("Please fill in all student fields.");
+        return;
+      }
+
+      showSpinner();
+      setTimeout(() => {
+        sessionStorage.setItem("sla_session", JSON.stringify({
+          role: "student",
+          admission,
+        }));
+        window.location.href = "student_dashboard.html";
+      }, 1500);
+    });
+
+    // Admin login logic
+    adminLogin.addEventListener("click", () => {
+      const username = document.getElementById("adminUsername").value.trim();
+      const password = document.getElementById("adminPassword").value.trim();
+
+      if (!username || !password) {
+        alert("Please fill in all admin fields.");
+        return;
+      }
+
+      showSpinner();
+      setTimeout(() => {
+        sessionStorage.setItem("sla_session", JSON.stringify({
+          role: "admin",
+          username,
+        }));
+        window.location.href = "admin_dashboard.html";
+      }, 1500);
+    });
+  </script>
+</body>
+</html>
+
